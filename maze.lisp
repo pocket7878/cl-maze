@@ -114,31 +114,55 @@
 (defmethod display-maze ((maze <maze>) cell-size)
   (let ((wall-list (room-list-to-wall-list (rooms maze)
                                            (w maze)
-                                           (h maze))))
+                                           (h maze)))
+        (player-idx 0))
     (sdl:with-init ()
         (sdl:window (* cell-size (+ 2 (w maze))) (* cell-size (+ 2 (h maze))) :title-caption "Maze")
         (sdl:clear-display sdl:*white*)
-        (loop for w in wall-list
-              for id = (car w)
-              for w-list = (cadr w)
-              do
-              (multiple-value-bind (y x) (calc-x-y id (w maze))
-                (let ((x (+ cell-size (* x cell-size)))
-                      (y (+ cell-size (* y cell-size))))
-                (let ((f-dif-x `(0 0 ,cell-size 0))
-                      (f-dif-y `(0 0 0 ,cell-size))
-                      (t-dif-x `(,cell-size 0 ,cell-size ,cell-size))
-                      (t-dif-y `(0 ,cell-size ,cell-size ,cell-size)))
-                  (loop for wall in w-list
-                        for widx from 0
-                        for from-x = (+ x (nth widx f-dif-x))
-                        for from-y = (+ y (nth widx f-dif-y))
-                        for to-x = (+ x (nth widx t-dif-x))
-                        for to-y = (+ y (nth widx t-dif-y))
-                        when (null wall)
-                        do
-                        (sdl:draw-line-* from-x from-y to-x to-y :color sdl:*black*))))))
-        (sdl:update-display)
         (sdl:with-events ()
           (:quit-event () t)
-          (:idle () (sdl:update-display))))))
+          (:key-down-event (:key key)
+           (let ((walls (cadr (nth player-idx wall-list))))
+             (cond 
+               ((sdl:key= key :sdl-key-up)
+                (when (nth 0 walls)
+                  (decf player-idx (w maze))))
+               ((sdl:key= key :sdl-key-left)
+                (when (nth 1 walls)
+                  (decf player-idx)))
+               ((sdl:key= key :sdl-key-right)
+                (when (nth 2 walls)
+                  (incf player-idx)))
+               ((sdl:key= key :sdl-key-down)
+                (when (nth 3 walls)
+                  (incf player-idx (w maze)))))))
+          (:idle () 
+           (sdl:clear-display sdl:*white*)
+           ;;Display Map once
+           (loop for w in wall-list
+                 for id = (car w)
+                 for w-list = (cadr w)
+                 do
+                 (multiple-value-bind (y x) (calc-x-y id (w maze))
+                   (let ((x (+ cell-size (* x cell-size)))
+                         (y (+ cell-size (* y cell-size))))
+                     (let ((f-dif-x `(0 0 ,cell-size 0))
+                           (f-dif-y `(0 0 0 ,cell-size))
+                           (t-dif-x `(,cell-size 0 ,cell-size ,cell-size))
+                           (t-dif-y `(0 ,cell-size ,cell-size ,cell-size)))
+                       (loop for wall in w-list
+                             for widx from 0
+                             for from-x = (+ x (nth widx f-dif-x))
+                             for from-y = (+ y (nth widx f-dif-y))
+                             for to-x = (+ x (nth widx t-dif-x))
+                             for to-y = (+ y (nth widx t-dif-y))
+                             when (null wall)
+                             do
+                             (sdl:draw-line-* from-x from-y to-x to-y :color sdl:*black*))))))
+           ;;Display Player
+           (multiple-value-bind (y x) (calc-x-y player-idx (w maze))
+             (sdl:draw-filled-circle-* 
+               (round (+ cell-size (/ cell-size 2) (* x cell-size)))
+               (round (+ cell-size (/ cell-size 2) (* y cell-size)))
+               (round (/ cell-size 2.5)) :color sdl:*red*))
+           (sdl:update-display))))))
