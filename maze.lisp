@@ -1,5 +1,16 @@
+(defpackage :cl-maze 
+  (:use :common-lisp)
+  (:shadow :room))
+
+(in-package :cl-maze)
+
 (ql:quickload :lispbuilder-sdl)
 (ql:quickload :lispbuilder-sdl-gfx)
+
+(defstruct room
+  idx
+  cluster-id
+  adjacency)
 
 ;;迷路のデータ構造
 (defclass <maze> ()
@@ -12,7 +23,8 @@
   (let ((array (make-array (* w h) :initial-element 0)))
     (loop for idx from 0 upto (1- (* w h))
           do
-          (setf (aref array idx) (list idx idx nil)))
+          (setf (aref array idx)
+                (make-room :idx idx :cluster-id idx :adjacency '())))
     array))
 
 ;;単純なグリッドの部屋をつくる
@@ -21,18 +33,8 @@
                  :w w :h h
                  :rooms (make-room-list w h)))
 
-;;対応する番号の部屋を返す
 (defmethod get-room ((maze <maze>) idx)
-    (aref (rooms maze) idx))
-
-;;部屋のクラスタ番号を返す
-(defmethod get-cluster-id ((maze <maze>) idx)
-  (cadr (get-room maze idx)))
-
-;;部屋のクラスタ番号を設定する
-(defmethod set-cluster-id ((maze <maze>) idx new-id)
-  (setf (cadr (aref (rooms maze) idx)) new-id))
-
+  (aref (rooms maze) idx))
 
 ;;全ての部屋がクラスタ0に属していたら終了
 #|
@@ -44,7 +46,7 @@
 | よって最終状態では、クラスタ番号は確実に全て0になっている。
  |#
 (defmethod build-finished-p ((maze <maze>))
-  (every (lambda (room) (zerop (cadr room)))
+  (every (lambda (room) (zerop (room-cluster-id room)))
          (rooms maze)))
 
 ;;x座標とy座標を計算
@@ -62,22 +64,25 @@
 
 ;;隣接した部屋ならば、繋げる
 (defmethod connect-room ((maze <maze>) i j)
-  (let ((id-i (get-cluster-id maze i))
-        (id-j (get-cluster-id maze j)))
-    (when (and (not (equal id-i id-j)) (neighbor-room-p maze i j))
+  (let* ((room-i (get-room maze i))
+         (room-j (get-room maze j))
+         (id-i (room-cluster-id room-i))
+         (id-j (room-cluster-id room-j)))
+    (when (and (not (equal id-i id-j)) 
+               (neighbor-room-p maze i j))
       ;それぞれの部屋の隣接リストに相手の部屋を追加する
-      (pushnew j (caddr (aref (rooms maze) i)))
-      (pushnew i (caddr (aref (rooms maze) j)))
+      (pushnew j (room-adjacency room-i))
+      (pushnew i (room-adjacency room-j))
       ;小さい方のクラスタ番号を採用
       (if (< id-i id-j)
         (loop for room across (rooms maze)
-              when (= (cadr room) id-j)
+              when (= (room-cluster-id room) id-j)
               do
-              (setf (cadr room) id-i))
+              (setf (room-cluster-id room) id-i))
         (loop for room across (rooms maze)
-              when (= (cadr room) id-i)
+              when (= (room-cluster-id room) id-i)
               do
-              (setf (cadr room) id-j))))))
+              (setf (room-cluster-id room) id-j))))))
 
 ;;初期迷路を生成し、全ての部屋が同じクラスタに属するまで
 ;;部屋をつなげていく
@@ -95,15 +100,16 @@
 
 ;;部屋の接続リストを各部屋の壁のリストにする
 (defun room-list-to-wall-list (room-list w h)
+  (declare (ignore h))
   (loop for r across room-list
-        for room-id = (car r)
-        for con-list = (sort (copy-list (caddr r)) #'<)
+        for room-id = (room-idx r)
+        for adja = (room-adjacency r)
         collect `(,room-id 
                    ,(list 
-                      (t-or-nil (member (- room-id w) con-list))
-                      (t-or-nil (member (1- room-id) con-list))
-                      (t-or-nil (member (1+ room-id) con-list))
-                      (t-or-nil (member (+ room-id w) con-list))))))
+                      (t-or-nil (member (- room-id w) adja))
+                      (t-or-nil (member (1- room-id) adja))
+                      (t-or-nil (member (1+ room-id) adja))
+                      (t-or-nil (member (+ room-id w) adja))))))
 
 (defmethod display-maze ((maze <maze>) cell-size)
   (let ((wall-list (room-list-to-wall-list (rooms maze)
