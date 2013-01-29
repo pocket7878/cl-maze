@@ -6,6 +6,7 @@
 
 (ql:quickload :lispbuilder-sdl)
 (ql:quickload :lispbuilder-sdl-gfx)
+(ql:quickload :queues.priority-queue)
 
 (defstruct room
   idx
@@ -110,6 +111,31 @@
                       (t-or-nil (member (1- room-id) adja))
                       (t-or-nil (member (1+ room-id) adja))
                       (t-or-nil (member (+ room-id w) adja))))))
+
+(defmethod solve ((maze <maze>))
+  (let ((U (queues:make-queue :priority-queue 
+                              :compare (lambda (r1 r2) (< (cdr r1) (cdr r2)))))
+        (V (make-hash-table)))
+    ;;Add First node
+    (queues:qpush U (cons (aref (rooms maze) 0) 0))
+    ;;Add Rest nodes
+    (loop for idx from 1 below (* (w maze) (h maze))
+          do
+          (queues:qpush U (cons (aref (rooms maze) idx) most-positive-fixnum)))
+    (loop while (not (zerop (queues:qsize U)))
+          do
+          (let ((p (queues:qtop U)))
+            ;;Remove p from U add to V
+            (queues:qpop U)
+            ;; roomIdx -> distance
+            (setf (gethash (room-idx (car p)) V) (cdr p))
+            (loop for adj in (room-adjacency (car p))
+                  when #1=(queues:queue-find U (lambda (n) (equalp (car n) (aref (rooms maze) adj))))
+                  do
+                  (setf (gethash (room-idx (car #2=(queues::node-value #1#))) V)
+                        #3=(min (cdr #2#) (1+ (cdr p))))
+                  (queues:queue-change U #1# (cons (car #2#) #3#)) )))
+    V))
 
 (defmethod display-maze ((maze <maze>) cell-size)
   (let ((wall-list (room-list-to-wall-list (rooms maze)
