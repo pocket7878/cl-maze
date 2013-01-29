@@ -139,13 +139,14 @@
     ;;Create route from distance table
     (let ((current-idx (1- (* (w maze) (h maze)))))
       (loop 
+        collect current-idx into route
         do
         (setf current-idx 
               (find-if (lambda (idx) (= (gethash idx V)
                                         (1- (gethash current-idx V))))
                        (room-adjacency (aref (rooms maze) current-idx))))
-        collect current-idx
-        until (zerop current-idx)))))
+        until (zerop current-idx)
+        finally (return (cons 0 (nreverse route)))))))
 
 
 
@@ -153,6 +154,7 @@
   (let ((wall-list (room-list-to-wall-list (rooms maze)
                                            (w maze)
                                            (h maze)))
+        (goal-route (solve maze))
         (player-idx 0))
     (sdl:with-init ()
         (sdl:window (* cell-size (+ 2 (w maze))) (* cell-size (+ 2 (h maze))) :title-caption "Maze")
@@ -184,6 +186,9 @@
                  (multiple-value-bind (y x) (calc-x-y id (w maze))
                    (let ((x (+ cell-size (* x cell-size)))
                          (y (+ cell-size (* y cell-size))))
+                     (when (member id goal-route)
+                       (sdl:draw-box-* x y cell-size cell-size
+                                             :color sdl:*green*))
                      (let ((f-dif-x `(0 0 ,cell-size 0))
                            (f-dif-y `(0 0 0 ,cell-size))
                            (t-dif-x `(,cell-size 0 ,cell-size ,cell-size))
