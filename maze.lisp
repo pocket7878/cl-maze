@@ -113,6 +113,7 @@
                       (t-or-nil (member (+ room-id w) adja))))))
 
 (defmethod solve ((maze <maze>))
+  ;;Calcurate each cell minimum distance from start
   (let ((U (queues:make-queue :priority-queue 
                               :compare (lambda (r1 r2) (< (cdr r1) (cdr r2)))))
         (V (make-hash-table)))
@@ -135,7 +136,18 @@
                   (setf (gethash (room-idx (car #2=(queues::node-value #1#))) V)
                         #3=(min (cdr #2#) (1+ (cdr p))))
                   (queues:queue-change U #1# (cons (car #2#) #3#)) )))
-    V))
+    ;;Create route from distance table
+    (let ((current-idx (1- (* (w maze) (h maze)))))
+      (loop 
+        do
+        (setf current-idx 
+              (find-if (lambda (idx) (= (gethash idx V)
+                                        (1- (gethash current-idx V))))
+                       (room-adjacency (aref (rooms maze) current-idx))))
+        collect current-idx
+        until (zerop current-idx)))))
+
+
 
 (defmethod display-maze ((maze <maze>) cell-size)
   (let ((wall-list (room-list-to-wall-list (rooms maze)
